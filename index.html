@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batch Manufacturing Dashboard</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --brand:#0e7490; --brand2:#155e75;
+    --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --line:#e2e8f0; --bg:#f1f5f9;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+  header{background:linear-gradient(135deg,var(--brand),#0f766e);color:#fff;padding:22px 28px}
+  header h1{font-size:22px;font-weight:700}
+  header p{opacity:.9;font-size:13px;margin-top:4px}
+  .wrap{max-width:1200px;margin:0 auto;padding:22px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .kpi .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .kpi .v{font-size:24px;font-weight:700;margin-top:4px}
+  .kpi .s{font-size:12px;margin-top:2px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .card h2{font-size:15px;margin-bottom:12px}
+  .full{grid-column:1/-1}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+  td:first-child,th:first-child{text-align:left}
+  .pos{color:var(--ok);font-weight:600}
+  .neg{color:var(--bad);font-weight:600}
+  .warn{color:var(--warn);font-weight:600}
+  .pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:600}
+  .pill.ok{background:#dcfce7;color:var(--ok)}
+  .pill.warn{background:#fef3c7;color:var(--warn)}
+  .pill.bad{background:#fee2e2;color:var(--bad)}
+  button{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:600;cursor:pointer;font-size:13px}
+  button.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand)}
+  button:hover{background:var(--brand2)}
+  .actions{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  canvas{width:100%;height:260px}
+  form.inline{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+  label{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+  input{width:130px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+  select{padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+  @media(max-width:800px){.grid{grid-template-columns:1fr}}
+  .chartRow{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:800px){.chartRow{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Batch Manufacturing Dashboard</h1>
+  <p>Batch yield, processing times, rejections, downtime and operator productivity</p>
+</header>
+<div class="wrap">
+  <div class="kpis" id="kpis"></div>
+  <div class="actions">
+    <button onclick="seed()">Load demo batch data</button>
+    <button class="ghost" onclick="exportCSV()">Export batch log (CSV)</button>
+  </div>
+  <div class="chartRow">
+    <div class="card">
+      <h2>Monthly yield trend</h2>
+      <canvas id="trend" style="height:250px"></canvas>
+    </div>
+    <div class="card">
+      <h2>Downtime pareto (minutes by reason)</h2>
+      <canvas id="pareto" style="height:250px"></canvas>
+    </div>
+  </div>
+  <div class="card full" style="margin-top:18px">
+    <h2>Add a batch</h2>
+    <form class="inline" onsubmit="addBatch(event)">
+      <label>Batch no <input type="text" id="f_batch" placeholder="QCIL-2423" style="width:120px"></label>
+      <label>Product
+        <select id="f_product"><option>Amoxicillin 500</option><option>Ciprofloxacin 250</option><option>Metronidazole 400</option></select>
+      </label>
+      <label>Month <input type="text" id="f_month" placeholder="2026-12" style="width:100px"></label>
+      <label>Theoretical (kg) <input type="number" id="f_the" step="0.1" min="0" value="150"></label>
+      <label>Actual (kg) <input type="number" id="f_act" step="0.1" min="0" value="146"></label>
+      <label>Process time (h) <input type="number" id="f_hrs" step="0.1" min="0" value="8"></label>
+      <label>Operator <input type="text" id="f_op" placeholder="M. Nkugwa" style="width:120px"></label>
+      <label>Status
+        <select id="f_status"><option>approved</option><option>rejected</option><option>on-hold</option></select>
+      </label>
+      <button>Add batch</button>
+    </form>
+  </div>
+  <div class="grid" style="margin-top:18px">
+    <div class="card full">
+      <h2>Batch log</h2>
+      <table>
+        <thead><tr><th>Batch</th><th>Product</th><th>Month</th><th>Theor kg</th><th>Actual kg</th><th>Yield</th><th>Hours</th><th>Operator</th><th>Status</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="card full">
+      <h2>Operator productivity</h2>
+      <table>
+        <thead><tr><th>Operator</th><th>Batches</th><th>Approved</th><th>Rejected</th><th>Avg yield</th><th>Total h</th><th>kg/h</th></tr></thead>
+        <tbody id="opBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+const $ = s => document.getElementById(s);
+let batches = [];
+let downtime = [];
+const fmt = (x,d=1) => (x*100).toFixed(d)+'%';
+const yieldOf = b => b.actual/b.theo;
+
+function pill(s){ return '<span class="pill '+({approved:'ok',rejected:'bad','on-hold':'warn'}[s]||'warn')+'">'+s+'</span>'; }
+
+function addBatch(e){
+  e.preventDefault();
+  const b={
+    batch:$('f_batch').value||'QCIL-'+Math.floor(2400+Math.random()*99),
+    product:$('f_product').value, month:$('f_month').value||new Date().toISOString().slice(0,7),
+    theo:+$('f_the').value, actual:+$('f_act').value, hours:+$('f_hrs').value,
+    operator:$('f_op').value||'M. Nkugwa', status:$('f_status').value
+  };
+  batches.unshift(b); render();
+}
+function seed(){
+  batches=[
+    {batch:'QCIL-2416',product:'Ciprofloxacin 250',month:'2026-08',theo:120,actual:111,hours:8.2,operator:'P. Ochieng',status:'approved'},
+    {batch:'QCIL-2417',product:'Metronidazole 400',month:'2026-09',theo:100,actual:98.8,hours:6.2,operator:'M. Nkugwa',status:'approved'},
+    {batch:'QCIL-2418',product:'Metronidazole 400',month:'2026-09',theo:100,actual:91,hours:7.7,operator:'A. Wamala',status:'rejected'},
+    {batch:'QCIL-2419',product:'Amoxicillin 500',month:'2026-10',theo:150,actual:148,hours:8,operator:'S. Namuli',status:'approved'},
+    {batch:'QCIL-2420',product:'Amoxicillin 500',month:'2026-11',theo:150,actual:146.3,hours:8.3,operator:'M. Nkugwa',status:'approved'},
+    {batch:'QCIL-2421',product:'Ciprofloxacin 250',month:'2026-12',theo:120,actual:117,hours:7,operator:'P. Ochieng',status:'approved'},
+    {batch:'QCIL-2422',product:'Metronidazole 400',month:'2026-12',theo:100,actual:96,hours:6.6,operator:'A. Wamala',status:'approved'},
+    {batch:'QCIL-2423',product:'Amoxicillin 500',month:'2026-01',theo:150,actual:143,hours:8.2,operator:'M. Nkugwa',status:'approved'},
+  ];
+  downtime=[
+    {reason:'Granulation mixer OOS — awaiting calibration',minutes:95},
+    {reason:'Changeover between compressed products',minutes:70},
+    {reason:'HVAC fault cleared (cleanroom alarm)',minutes:55},
+    {reason:'Raw material quarantine release delay',minutes:40},
+    {reason:'Compression station set-up',minutes:35},
+  ];
+  render();
+}
+
+function monthlyTrend(){
+  const map={};
+  batches.forEach(b=>{ (map[b.month]=map[b.month]||[]).push(yieldOf(b)); });
+  return Object.keys(map).sort().map(m=>({m, v:map[m].reduce((a,x)=>a+x,0)/map[m].length}));
+}
+
+function render(){
+  const n=batches.length;
+  const avgYield=n?batches.reduce((a,b)=>a+yieldOf(b),0)/n:0;
+  const rej=n?batches.filter(b=>b.status==='rejected').length/n:0;
+  const avgHrs=n?batches.reduce((a,b)=>a+b.hours,0)/n:0;
+  $('kpis').innerHTML=[
+    ['Batches',n,'in current log'],
+    ['Avg yield',fmt(avgYield),'material recovery'],
+    ['Rejection rate',fmt(rej),'rejected / total'],
+    ['Avg process time',avgHrs.toFixed(1)+' h','per batch'],
+  ].map(k=>'<div class="kpi"><div class="l">'+k[0]+'</div><div class="v">'+k[1]+'</div><div class="s">'+k[2]+'</div></div>').join('');
+  $('tbody').innerHTML=batches.map(b=>{
+    const y=yieldOf(b);
+    return '<tr><td>'+b.batch+'</td><td>'+b.product+'</td><td>'+b.month+'</td><td>'+b.theo+'</td>'+
+      '<td>'+b.actual+'</td><td class="'+(y>=0.95?'pos':y>=0.9?'warn':'neg')+'">'+fmt(y)+'</td>'+
+      '<td>'+b.hours+'</td><td>'+b.operator+'</td><td>'+pill(b.status)+'</td></tr>';
+  }).join('');
+  const ops={};
+  batches.forEach(b=>{
+    ops[b.operator]=ops[b.operator]||{operator:b.operator,batches:0,approved:0,rejected:0,sumY:0,hrs:0,kg:0};
+    const o=ops[b.operator]; o.batches++; o.hrs+=b.hours; o.kg+=b.actual; o.sumY+=yieldOf(b);
+    if(b.status==='approved')o.approved++; else if(b.status==='rejected')o.rejected++;
+  });
+  const rows=Object.values(ops).sort((a,b)=>b.batches-a.batches);
+  $('opBody').innerHTML=rows.map(o=>'<tr><td>'+o.operator+'</td><td>'+o.batches+'</td><td class="pos">'+o.approved+'</td>'+
+    '<td class="'+(o.rejected?'neg':'')+'">'+o.rejected+'</td><td>'+fmt(o.sumY/o.batches)+'</td>'+
+    '<td>'+o.hrs.toFixed(1)+'</td><td>'+ (o.kg/o.hrs).toFixed(1)+'</td></tr>').join('');
+  drawTrend(monthlyTrend());
+  drawPareto();
+}
+function drawTrend(months){
+  const c=$('trend'), x=c.getContext('2d');
+  c.width=c.offsetWidth; if(!c.width) return;
+  const w=c.width, h=c.height;
+  x.clearRect(0,0,w,h);
+  if(!months.length){ x.fillStyle='#64748b'; x.font='14px system-ui'; x.textAlign='center'; x.fillText('No batches logged',w/2,h/2); return; }
+  const pad={l:40,r:10,t:16,b:30}, ax=w-pad.l-pad.r, ay=h-pad.t-pad.b;
+  const min=0.85, max=1.0;
+  const X=i=>pad.l+i*(ax/(months.length-1||1));
+  const Y=v=>pad.t+ay-(v-min)/(max-min)*ay;
+  x.strokeStyle='#e2e8f0'; x.lineWidth=1;
+  for(let g=0; g<=4; g++){ const v=min+(max-min)*g/4, yp=Y(v);
+    x.beginPath(); x.moveTo(pad.l,yp); x.lineTo(pad.l+ax,yp); x.stroke();
+    x.fillStyle='#64748b'; x.font='11px system-ui'; x.textAlign='right';
+    x.fillText(fmt(v,0), pad.l-6, yp+4); }
+  x.strokeStyle='#0e7490'; x.lineWidth=2;
+  x.beginPath();
+  months.forEach((m,i)=>{ const px=X(i), py=Y(m.v); i?x.lineTo(px,py):x.moveTo(px,py); });
+  x.stroke();
+  months.forEach((m,i)=>{
+    const px=X(i), py=Y(m.v);
+    x.fillStyle='#0e7490'; x.beginPath(); x.arc(px,py,3.5,0,Math.PI*2); x.fill();
+    x.fillStyle='#0f172a'; x.font='600 11px system-ui'; x.textAlign='center';
+    x.fillText(fmt(m.v,0), px, py-8);
+    x.fillStyle='#64748b'; x.font='10px system-ui'; x.fillText(m.m.slice(2), px, h-10);
+  });
+}
+function drawPareto(){
+  const c=$('pareto'), x=c.getContext('2d');
+  c.width=c.offsetWidth; if(!c.width) return;
+  const w=c.width, h=c.height;
+  x.clearRect(0,0,w,h);
+  const totals={};
+  downtime.forEach(d=>totals[d.reason]=(totals[d.reason]||0)+d.minutes);
+  const rows=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  if(!rows.length){ x.fillStyle='#64748b'; x.font='14px system-ui'; x.textAlign='center'; x.fillText('No downtime logged',w/2,h/2); return; }
+  const pad={l:30,r:10,t:14,b:34}, ax=w-pad.l-pad.r, ay=h-pad.t-pad.b;
+  const max=rows[0][1]||1, bw=ax/rows.length;
+  rows.forEach((r,i)=>{
+    const bh=(r[1]/max)*ay;
+    x.fillStyle='#f59e0b';
+    x.fillRect(pad.l+i*bw+4, h-pad.b-bh, bw-8, bh);
+    x.fillStyle='#64748b'; x.font='10px system-ui'; x.textAlign='center';
+    x.fillText(r[1], pad.l+i*bw+bw/2, h-pad.b+12);
+    x.fillText(r[0].length>14?r[0].slice(0,14)+'…':r[0], pad.l+i*bw+bw/2, h-pad.b+22);
+  });
+}
+function exportCSV(){
+  if(!batches.length){ alert('No batches yet.'); return; }
+  const lines=['Batch,Product,Month,TheoreticalKg,ActualKg,YieldPct,Hours,Operator,Status'];
+  batches.forEach(b=>lines.push([b.batch,b.product,b.month,b.theo,b.actual,(yieldOf(b)*100).toFixed(1),b.hours,b.operator,b.status].join(',')));
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(lines.join('\n'));
+  a.download='batch_log.csv'; a.click();
+}
+seed();
+</script>
+</body>
+</html>
