@@ -13,10 +13,13 @@ answer *"are the last twelve months going in the right direction?"* in one view.
 [![Stack](https://img.shields.io/badge/stack-HTML%20%2B%20CSS%20%2B%20JS-f59e0b)](#)
 [![Tests](https://img.shields.io/badge/tests-10%20passing-green)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](#)
+[![Live demo](https://img.shields.io/badge/live%20demo-online-0e7490)](https://marknwilliam.github.io/batch-manufacturing-dashboard/)
 
 </div>
 
 ---
+
+![Dashboard preview](docs/preview.png)
 
 ## Why this exists
 
@@ -94,6 +97,7 @@ batch-manufacturing-dashboard/
 ├── index.html               # interactive dashboard (open this)
 ├── batch_analysis.py        # analytics library + CLI
 ├── test_batch_analysis.py   # unit tests
+├── docs/        # README preview screenshot
 └── README.md
 ```
 
